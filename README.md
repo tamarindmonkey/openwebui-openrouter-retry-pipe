@@ -1,6 +1,6 @@
 # OpenRouter Free Model Retry Pipe
 
-This is a revised version of the OpenRouter pipe that includes enhanced retry logic with status summaries, filtering to only show free models, improved error handling, and artifact filtering.
+This is an Open WebUI pipe that includes enhanced retry logic for problematic free model providers from OpenRouter.ai with status summaries, filtering to only show free models, improved error handling, and artifact filtering.
 
 ## New Features in v0.1.9
 
