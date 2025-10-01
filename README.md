@@ -1,12 +1,8 @@
 # Automatic Retry Pipe
 
-<<<<<<< HEAD
-This is an Open WebUI pipe that includes enhanced retry logic for problematic free model providers from OpenRouter.ai with status summaries, filtering to only show free models, improved error handling, and artifact filtering.
-=======
 **Version 0.1.20**
->>>>>>> c673140 (linted. New README.md)
 
-A sophisticated retry mechanism for Open WebUI that automatically handles API failures with intelligent backoff strategies, real-time status updates, and seamless integration.
+A sophisticated retry mechanism for Open WebUI that automatically handles failed requests with intelligent backoff strategies, real-time status updates, and seamless integration.
 
 ## Overview
 
