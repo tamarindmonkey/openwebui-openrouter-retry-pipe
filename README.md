@@ -1,58 +1,46 @@
-# OpenRouter Free Model Retry Pipe
+# Automatic Retry Pipe
 
+<<<<<<< HEAD
 This is an Open WebUI pipe that includes enhanced retry logic for problematic free model providers from OpenRouter.ai with status summaries, filtering to only show free models, improved error handling, and artifact filtering.
+=======
+**Version 0.1.20**
+>>>>>>> c673140 (linted. New README.md)
 
-## New Features in v0.1.15
+A sophisticated retry mechanism for Open WebUI that automatically handles API failures with intelligent backoff strategies, real-time status updates, and seamless integration.
 
-### 📊 Enhanced Logging and Notifications
-- **Structured logging**: Console logs now include user:model context and error details (e.g., `user:model - Attempt 29/60: ERROR: 429` or `user:model - Attempt 29: SUCCESS`)
-- **Multi-colored UI notifications**: Toast messages use appropriate colors for different states:
-  - 🔴 **Error** (red): Final failures and critical errors
-  - 🟡 **Warning** (yellow): Burst/cycle failures and retry warnings
-  - 🔵 **Info** (blue): Retry summaries and progress updates
-  - 🟢 **Success** (green): Successful responses after retries
-- **Improved UI notifications**: Toast messages show concise, formatted status without injecting content into chat responses
-- **Backend-only**: All notifications use OpenWebUI's event emitter system, no frontend changes required
+## Overview
 
-### 🔧 Implementation Improvements
-- **Aiohttp-optional**: Graceful fallback to synchronous requests if aiohttp is unavailable (e.g., pip install fails in containers)
-- **Model name normalization**: Free models display as "OR-Free/Model Name (Retry)" without redundant prefixes
-- **Robust user valve handling**: Safely extracts API keys whether user valves are dicts or Pydantic objects
+The Automatic Retry Pipe enhances Open WebUI by providing robust automatic retry functionality for OpenRouter API requests. When API calls fail due to rate limits, timeouts, or temporary errors, the pipe intelligently retries requests using a burst-based scheduling strategy while keeping users informed through real-time status updates.
 
-## Previous Features in v0.1.12
+## Key Features
 
-### 🐛 Bug Fixes
-- **Server Lockup Fix**: Converted to asynchronous implementation to prevent blocking the entire Open WebUI server during retries
-- **Image Rendering Fix**: Removed markdown formatting from retry summaries to prevent interference with image rendering in responses
-- **Content Parsing**: Retry summaries now use plain text formatting to avoid conflicts with markdown content
+### 🔄 Intelligent Retry Logic
 
-## Previous Features in v0.1.9
+- **Burst-based retries**: Fast retry bursts (default 10 attempts) with short delays (2-4 seconds)
+- **Progressive backoff**: Longer pauses between retry cycles (15-30 seconds between bursts, 60 seconds between cycles)
+- **Configurable limits**: Configurable cycles (default 2) with configurable burst count (default 3) within each cycle
+- **Smart error handling**: Distinguishes between retryable and permanent errors
 
-### 🎯 Free Models Only
-- **Filtered Model List**: Only displays models that end with "(free)" from OpenRouter's API
-- **Alphabetical Sorting**: Free models are sorted alphabetically for easier browsing
-- **Reduced Clutter**: Eliminates paid models from the interface for users focused on free options
+### 📊 Real-Time Status Updates
 
-### 📢 Retry Status Summaries
-- **Response Integration**: Retry information is included directly in the chat response when retries occur
-- **Detailed Summaries**: Shows attempt count, success/failure status, and error details
-- **Non-Intrusive**: Status appears as part of the response content without UI notifications
+- **Live progress tracking**: See attempt-by-attempt progress in the chat interface
+- **Visual status indicators**: Color-coded notifications (success green, warning yellow, error red)
+- **Detailed summaries**: Complete retry history with timing and error information
+- **Non-blocking UI**: Status updates don't interfere with chat functionality
 
-### 🔧 Enhanced Retry Logic
-- **Asynchronous Implementation**: Non-blocking retries that don't lock up the Open WebUI server
-- **Response Content Integration**: Retry summaries are prepended to successful responses
-- **Improved Error Handling**: Better detection and reporting of different error types
+### 🔧 Advanced Configuration
 
-### 🔁 Retry Scheduler Improvements (v0.1.12)
-- **Burst-based retries**: Fast retry bursts to recover quickly from transient 429s:
-  - attempts_per_burst (default 10) with 2–4s spacing between attempts
-  - bursts_before_long_pause (default 3)
-  - burst pause between bursts: 15–30s
-  - cycles (default 2) with a long pause (default 60s) between cycles
-- **Structured final error**: If all attempts are exhausted the pipe returns a structured error:
-  {"error": {"message": "..."},"retry_info": {"attempts": N, "success": false, "errors": [...]}}
-- **Notifications**: Optional ENABLE_NOTIFICATIONS valve (default true) emits status events to the OpenWebUI event emitter on retries, bursts, cycles, success and final failure.
-- **Non-blocking**: All waits use asyncio so the server remains responsive.
+- **Per-user settings**: Individual API keys and preferences
+- **Valve-based controls**: Fine-tune retry behavior through Open WebUI's valve system
+- **Notification toggles**: Enable/disable different types of notifications
+- **Provider detection**: Automatic provider name recognition for status messages
+
+### 🚀 Performance Optimizations
+
+- **Asynchronous processing**: Non-blocking retry logic using asyncio
+- **Session isolation**: Fresh HTTP connections for each attempt to prevent corruption
+- **Memory management**: Proper cleanup of HTTP sessions and connections
+- **Streaming support**: Full compatibility with streaming responses
 
 ## Installation
 
@@ -61,133 +49,247 @@ This is an Open WebUI pipe that includes enhanced retry logic for problematic fr
 1. Navigate to your Open WebUI Admin Panel
 2. Go to **Functions**
 3. Click **Upload Function**
-4. Select the `openrouter-retry.py` file from this directory
+4. Select the `automatic_retry.py` file
 5. Click **Install**
 
 ### Method 2: Manual Installation
 
-1. Copy the `openrouter-retry.py` file to your Open WebUI functions directory:
-    ```
-    cp openrouter-retry.py /path/to/open-webui/functions/pipes/openrouter_retry/
-    ```
+1. Copy `automatic_retry.py` to your Open WebUI functions directory:
 
-2. If you're using Docker, you can mount the file as a volume:
-    ```bash
-    docker run -d -p 3000:8080 \
-      --add-host=host.docker.internal:host-gateway \
-      -v ./functions/pipes/openrouter_retry:/app/functions/pipes/openrouter_retry \
-      -v open-webui:/app/backend/data \
-      --name open-webui \
-      --restart always \
-      ghcr.io/open-webui/open-webui:main
-    ```
+   ```bash
+   cp automatic_retry.py /path/to/open-webui/functions/pipes/
+   ```
+
+2. If using Docker, mount the file as a volume:
+
+   ```bash
+   docker run -d -p 3000:8080 \
+     --add-host=host.docker.internal:host-gateway \
+     -v ./automatic_retry.py:/app/functions/pipes/automatic_retry.py \
+     -v open-webui:/app/backend/data \
+     --name open-webui \
+     --restart always \
+     ghcr.io/open-webui/open-webui:main
+   ```
 
 ## Dependencies
 
-This pipe uses aiohttp for non-blocking HTTP I/O.
+The pipe requires `aiohttp` for optimal performance:
 
-- If you run Open WebUI in Docker (container name may vary):
-  ```
+- **Docker installation**:
+
+  ```bash
   docker exec -it open-webui pip install --no-cache-dir aiohttp
-  # or if pip is not found
-  docker exec -it open-webui pip3 install --no-cache-dir aiohttp
-  ```
-- If you run Open WebUI on the host:
-  ```
-  pip install aiohttp
-  # or
-  pip3 install aiohttp
   ```
 
-Note: After installing the dependency, restart the Open WebUI process/container.
+- **Host installation**:
+
+  ```bash
+  pip install aiohttp
+  ```
+
+**Note**: Restart Open WebUI after installing dependencies. If aiohttp is unavailable, the pipe falls back to synchronous requests.
 
 ## Configuration
 
-After installation, configure the pipe through the Open WebUI Admin Panel:
+Configure the pipe through Open WebUI's Admin Panel > Functions > Automatic Retry Pipe > Configure:
 
-1. Navigate to **Admin Panel > Functions**
-2. Find the "OpenRouter Free Model Retry Pipe" in the list
-3. Click the **Configure** button (gear icon)
-4. Set the following options:
+| Setting | Description | Default | Range |
+|---------|-------------|---------|-------|
+| `NAME_PREFIX` | Model name prefix | "OR-Free/" | String |
+| `OPENROUTER_API_BASE_URL` | OpenRouter API endpoint | "https://openrouter.ai/api/v1" | URL |
+| `OPENROUTER_API_KEY` | Global API key | "" | String |
+| `ENABLE_NOTIFICATIONS` | Show status notifications | `true` | Boolean |
+| `ENABLE_IN_CHAT_ERRORS` | Show errors in chat | `true` | Boolean |
+| `attempts_per_burst` | Attempts per burst | 10 | 1-50 |
+| `attempt_delay_min` | Min delay between attempts | 2.0 | 0.1-10.0 |
+| `attempt_delay_max` | Max delay between attempts | 4.0 | 0.1-10.0 |
+| `bursts_before_long_pause` | Bursts per cycle | 3 | 1-10 |
+| `burst_pause_min` | Min pause between bursts | 15.0 | 1.0-300.0 |
+| `burst_pause_max` | Max pause between bursts | 30.0 | 1.0-300.0 |
+| `cycles` | Total retry cycles | 2 | 1-5 |
+| `long_pause` | Pause between cycles | 60.0 | 10.0-600.0 |
 
-| Option | Description | Default Value |
-|--------|-------------|---------------|
-| `OPENROUTER_API_BASE_URL` | The base URL for OpenRouter API endpoints | `https://openrouter.ai/api/v1` |
-| `OPENROUTER_API_KEY` | Required API key to retrieve the model list | `""` |
-| `ENABLE_NOTIFICATIONS` | Emit status events to OpenWebUI event emitter (if available) | `True` |
-| `attempts_per_burst` | Number of attempts per fast retry burst | `10` |
-| `attempt_delay_min` | Minimum delay between attempts within a burst (seconds) | `2.0` |
-| `attempt_delay_max` | Maximum delay between attempts within a burst (seconds) | `4.0` |
-| `bursts_before_long_pause` | Number of bursts before a longer pause | `3` |
-| `burst_pause_min` | Minimum pause between bursts (seconds) | `15.0` |
-| `burst_pause_max` | Maximum pause between bursts (seconds) | `30.0` |
-| `cycles` | Number of cycles (each cycle consists of bursts_before_long_pause bursts) | `2` |
-| `long_pause` | Long pause between cycles (seconds) | `60.0` |
+### User-Specific Configuration
 
-## How It Works
+Users can override the global API key through their personal valves:
 
-This version is asynchronous and non-blocking. While the pipe is waiting between retries, the server event loop remains responsive and other requests continue to be served. Retry attempt messages (e.g., "Received 429 error... Waiting X seconds...") are printed to the server logs immediately, one attempt at a time.
-
-
-### Model Filtering
-1. Fetches all available models from OpenRouter API
-2. Filters to only include models ending with "(free)"
-3. Sorts the filtered models alphabetically
-4. Presents only the free models in the OpenWebUI interface
-
-### Retry Logic with Status Summaries
-1. When a 429 error occurs, the pipe automatically retries with a burst-based timing strategy
-2. For streaming responses, retry information is prepended to the final response stream
-3. For non-streaming responses, a retry summary appears at the beginning of the response
-4. When retries exhaust, the pipe returns a structured error containing the provider error and retry_info; a final error notification is emitted so the UI can unblock
-
-### Status Summary Examples
-```
-OpenRouter Retry Summary: 3 attempts, Success
-```
-
-For failed retries:
-```
-OpenRouter Retry Summary: 31 attempts, Failed
-Last Error: Max retry attempts (31) exceeded for OpenRouter request.
-```
+- Navigate to **Settings** > **Account** > **Automatic Retry Pipe**
+- Enter personal `OPENROUTER_API_KEY`
 
 ## Usage
 
-1. After installing and configuring the pipe, restart your Open WebUI instance
-2. Only free models ending with "(free)" will appear in the model selector
-3. When using these models, 429 errors will be automatically retried with live status updates
-4. Monitor the retry progress through the status messages in the UI
+### Basic Usage
+
+1. **Install and configure** the pipe as described above
+2. **Select a model** with "Auto-Retry" in the name (e.g., "OR-Free/DeepSeek V3 (Auto-Retry)")
+3. **Send messages normally** - retries happen automatically on failures
+4. **Monitor progress** through status updates in the chat interface
+
+### Model Selection
+
+The pipe automatically filters and displays only free OpenRouter models with:
+
+- "OR-Free" (default) prefixed (configurable)
+- "(Auto-Retry)" appended
+
+```
+OR-Free/Anthropic: Claude 3.5 Sonnet (free) (Auto-Retry)
+OR-Free/Meta: Llama 3.1 405B (free) (Auto-Retry)
+OR-Free/Mistral: Mixtral 8x7B (free) (Auto-Retry)
+```
+
+### Status Monitoring
+
+During retries, you'll see real-time updates:
+
+```
+Attempt 1/60 in progress...
+Attempt 2/60 in progress...
+Attempt 3/60 in progress...
+Burst 1/3 completed (10/60 attempts). Waiting 18s before next burst
+Attempt 11/60 in progress...
+...
+Response received from DeepSeek after 2m45s (23 attempts)
+```
+
+### Notification Types
+
+- **🟢 Success**: Green notifications for successful responses after retries
+- **🟡 Warning**: Yellow notifications for retry cycle transitions
+- **🔴 Error**: Red notifications for final failures or critical errors
+- **🔵 Info**: Blue notifications for retry summaries and progress updates
+
+## How It Works
+
+### Retry Strategy
+
+The pipe uses a **hierarchical retry strategy**:
+
+```
+Cycles (2 total)
+├── Cycle 1
+│   ├── Burst 1: 10 attempts (2-4s delays)
+│   ├── Burst 2: 10 attempts (2-4s delays)
+│   └── Burst 3: 10 attempts (2-4s delays) → 15-30s pause
+└── Cycle 2
+    ├── Burst 1: 10 attempts (2-4s delays)
+    ├── Burst 2: 10 attempts (2-4s delays)
+    └── Burst 3: 10 attempts (2-4s delays) → 60s pause
+```
+
+**Total**: Up to 60 attempts over ~4-5 minutes
+
+### Error Classification
+
+- **Retryable errors** (429 rate limits, timeouts, connection errors):
+  - Trigger immediate retry with burst scheduling
+  - Show attempt-by-attempt status updates
+
+- **Permanent errors** (400-499 HTTP codes except 429):
+  - Fail immediately without retries
+  - Show error notification
+
+### Status Event System
+
+The pipe communicates progress through Open WebUI's event system:
+
+```javascript
+// Status updates
+{"type": "status", "data": {
+  "description": "Attempt 5/60 in progress...",
+  "done": false,
+  "hidden": false
+}}
+
+// Notifications
+{"type": "notification", "data": {
+  "type": "success",
+  "title": "OpenRouter",
+  "content": "Response received after 3 attempts",
+  "timeout": 10
+}}
+```
+
+### Session Management
+
+- **Fresh sessions**: Each retry attempt uses a new HTTP session
+- **Automatic cleanup**: Sessions are properly closed in all code paths
+- **Memory safety**: Prevents connection leaks and session corruption
+
+### Streaming Compatibility
+
+- **Full streaming support**: Works with real-time streaming responses
+- **Retry summary injection**: Adds retry information to streaming chats
+- **Session preservation**: Maintains streaming connections across retries
 
 ## Troubleshooting
 
-### Issue: Status messages not appearing
-**Solution**: Ensure you're using a compatible version of OpenWebUI that supports the event emitter system.
+### Common Issues
 
-### Issue: No free models showing
-**Solution**:
-1. Verify your OpenRouter API key has access to free models
-2. Check the OpenRouter API status
-3. Ensure the API key is correctly configured
+#### No free models showing
 
-### Issue: Retries not working
-**Solution**:
-1. Check that the model being used ends with "(free)"
-2. Verify the retry configuration values
-3. Check Open WebUI logs for any error messages
+- Verify your OpenRouter API key has access to free models
+- Check OpenRouter API status
+- Ensure the API key is correctly configured
 
-## Migration from Previous Version
+#### Status messages not appearing
 
-If you're upgrading from the original version:
+- Confirm you're using a compatible Open WebUI version
+- Check that `ENABLE_NOTIFICATIONS` is set to `true`
+- Verify the pipe is properly installed
 
-1. The pipe now only shows free models - if you need paid models, use the original version
-2. Status messages are now real-time during retries instead of only in error responses
-3. The pipe is now asynchronous and non-blocking; Open WebUI continues serving other users while retries sleep via asyncio without blocking the event loop
-4. Event emission is handled gracefully with fallback support for older OpenWebUI versions
+#### Retries not working
+
+- Ensure you're using a model with "(Auto-Retry)" in the name
+- Check retry configuration values
+- Review Open WebUI logs for error messages
+
+#### Unclosed session warnings
+
+- This is normal and indicates proper session cleanup
+- The warnings appear when sessions are garbage collected
+- They don't affect functionality
+
+### Log Analysis
+
+Monitor Open WebUI logs for detailed retry information:
+
+```
+INFO - John:deepseek/deepseek-chat-v3-0324:free - Attempt 1/60: ERROR: 429
+INFO - John:deepseek/deepseek-chat-v3-0324:free - Attempt 2/60: ERROR: 429
+INFO - John:deepseek/deepseek-chat-v3-0324:free - Attempt 3/60 (0m27s): SUCCESS
+```
+
+### Performance Tuning
+
+**For faster retries:**
+
+- Reduce `attempt_delay_max` and `burst_pause_max`
+- Increase `attempts_per_burst`
+
+**For more patience:**
+
+- Increase `cycles` and `long_pause`
+- Add more `bursts_before_long_pause`
+
+**For less intrusive notifications:**
+
+- Set `ENABLE_NOTIFICATIONS` to `false`
+- Keep only essential error notifications
+
+## Migration from Previous Versions
+
+If upgrading from earlier versions:
+
+- **Status events replace chat injection**: Retry information now appears as status updates instead of being injected into chat responses
+- **Improved session management**: Better HTTP connection handling prevents corruption
+- **Enhanced error classification**: More intelligent retry vs. fail decisions
+- **Real-time progress**: Live status updates during retry attempts
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! The pipe is designed to be extensible and well-documented.
 
 ## License
 

@@ -1,6 +1,6 @@
 """
 title: OpenRouter Automatic Retry Pipe
-version: 0.1.19
+version: 0.1.20
 description: Unified automatic retry handler for OpenRouter with consistent notifications for streaming and non-streaming requests
 author: tamarindmonkey
 author_url: https://github.com/tamarindmonkey
@@ -12,7 +12,7 @@ import logging
 import random
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional, Union, Generator, Iterator, AsyncGenerator, Any
+from typing import Optional, Union, Iterator, AsyncGenerator, Any
 
 # aiohttp is optional in environments where pip install is not available.
 # If aiohttp is missing, the pipe will fall back to using requests in a thread.
@@ -44,7 +44,7 @@ class Pipe:
         )
         ENABLE_NOTIFICATIONS: bool = Field(
             default=True,
-            description="Emit status notifications to the OpenWebUI event emitter when available.",
+            description="Emit status notifications to the Open WebUI event emitter when available.",
         )
         ENABLE_IN_CHAT_ERRORS: bool = Field(
             default=True,
@@ -259,7 +259,7 @@ class Pipe:
                 except Exception:
                     pass
             elif callable(event_emitter):
-                # Callable function (like in current OpenWebUI)
+                # Callable function (like in current Open WebUI)
                 try:
                     res = event_emitter({
                         "type": "status",
@@ -276,7 +276,6 @@ class Pipe:
                     pass
             else:
                 pass
-
 
     async def _send_notification(
         self,
@@ -326,7 +325,7 @@ class Pipe:
                     except Exception:
                         pass
             elif callable(event_emitter):
-                # Callable function (like in current OpenWebUI)
+                # Callable function (like in current Open WebUI)
                 try:
                     res = event_emitter({"type": "notification", "data": payload})
                     if asyncio.iscoroutine(res):
@@ -365,7 +364,6 @@ class Pipe:
         errors = []
         user_name = user.get("name", user.get("id", "unknown")) if user else "unknown"
         model_id = model or "unknown"
-
 
         for cycle in range(self.valves.cycles):
             for burst in range(self.valves.bursts_before_long_pause):
@@ -600,7 +598,7 @@ class Pipe:
     async def pipe(self, body: dict, __user__: Optional[dict] = None, __event_emitter__: Optional[Any] = None) -> Union[str, AsyncGenerator, Iterator]:
         """Process the pipe request with unified retry logic for both streaming and non-streaming"""
 
-        # Use the parameters directly as passed by OpenWebUI
+        # Use the parameters directly as passed by Open WebUI
         user = __user__
         event_emitter = __event_emitter__
 
@@ -632,7 +630,7 @@ class Pipe:
             "X-Title": "Open WebUI",
         }
 
-        # Extract model ID (remove prefix added by OpenWebUI)
+        # Extract model ID (remove prefix added by Open WebUI)
         model_id = body.get("model", "")
         if "." in model_id:
             model_id = model_id.split(".", 1)[1]
@@ -699,72 +697,75 @@ class Pipe:
                         pass
 
                 try:
-                    await session.close()
+                    await success_session.close()
                 except Exception:
                     pass
                 return {"error": error, "retry_info": retry_info}
 
             # SUCCESS - send notifications and status update, format response
             if retry_info.get("success"):
-                    # Extract provider name from model_id (e.g., "anthropic/claude-3" -> "Anthropic")
-                    provider_name = "Unknown"
-                    if "/" in model_id:
-                        provider_prefix = model_id.split("/")[0].lower()
-                        provider_map = {
-                            "anthropic": "Anthropic",
-                            "openai": "OpenAI",
-                            "google": "Google",
-                            "meta": "Meta",
-                            "mistral": "Mistral",
-                            "cohere": "Cohere",
-                            "together": "Together AI",
-                            "huggingface": "Hugging Face",
-                            "replicate": "Replicate",
-                            "perplexity": "Perplexity",
-                        }
-                        provider_name = provider_map.get(provider_prefix, provider_prefix.title())
-                    elapsed_time = retry_info.get("elapsed_time", 0)
-                    elapsed_str = f"{int(elapsed_time // 60)}m{int(elapsed_time % 60)}s"
+                # Extract provider name from model_id (e.g., "anthropic/claude-3" -> "Anthropic")
+                provider_name = "Unknown"
+                if "/" in model_id:
+                    provider_prefix = model_id.split("/")[0].lower()
+                    provider_map = {
+                        "anthropic": "Anthropic",
+                        "openai": "OpenAI",
+                        "google": "Google",
+                        "meta": "Meta",
+                        "mistral": "Mistral",
+                        "cohere": "Cohere",
+                        "together": "Together AI",
+                        "huggingface": "Hugging Face",
+                        "replicate": "Replicate",
+                        "perplexity": "Perplexity",
+                    }
+                    provider_name = provider_map.get(provider_prefix, provider_prefix.title())
+                elapsed_time = retry_info.get("elapsed_time", 0)
+                elapsed_str = f"{int(elapsed_time // 60)}m{int(elapsed_time % 60)}s"
 
-                    # Success notification
-                    attempts = retry_info.get('attempts', 1)
-                    if attempts > 1:
-                        # Multiple attempts - show retry success
-                        await self._send_notification(
-                            event_emitter,
-                            f"Response received after {attempts} attempt(s)",
-                            "success",
-                            timeout=10
-                        )
-
-                        # Retry summary notification (info level)
-                        retry_summary = self.format_retry_summary(retry_info)
-                        if retry_summary:
-                            await self._send_notification(
-                                event_emitter,
-                                retry_summary,
-                                "info",
-                                title="OpenRouter Retry Summary",
-                                timeout=10,
-                                meta={"retry_info": retry_info},
-                            )
-
-                    # Show final success status
-                    await self._send_status(
+                # Success notification
+                attempts = retry_info.get('attempts', 1)
+                if attempts > 1:
+                    # Multiple attempts - show retry success
+                    await self._send_notification(
                         event_emitter,
-                        f"Response received from {provider_name} after {elapsed_str} ({retry_info.get('attempts')} attempts)",
-                        done=True,
-                        hidden=False
+                        f"Response received after {attempts} attempt(s)",
+                        "success",
+                        timeout=10
                     )
 
-                    # Add retry summary to chat message for non-streaming (only for multiple attempts)
-                    if attempts > 1:
-                        retry_summary = self.format_retry_summary(retry_info)
-                        if retry_summary and not is_streaming:
-                            # Prepend retry summary to the response content
-                            if "choices" in response_data and response_data["choices"]:
-                                content = response_data["choices"][0].get("message", {}).get("content", "")
-                                response_data["choices"][0]["message"]["content"] = f"{retry_summary}\n\n{content}"
+                    # Retry summary notification (info level)
+                    retry_summary = self.format_retry_summary(retry_info)
+                    if retry_summary:
+                        await self._send_notification(
+                            event_emitter,
+                            retry_summary,
+                            "info",
+                            title="OpenRouter Retry Summary",
+                            timeout=10,
+                            meta={"retry_info": retry_info},
+                        )
+
+                # Show final success status
+                await self._send_status(
+                    event_emitter,
+                    f"Response received from {provider_name} after {elapsed_str} ({retry_info.get('attempts')} attempts)",
+                    done=True,
+                    hidden=False
+                )
+
+                # Get response data for modification
+                response_data = response.get("data", {})
+
+                # Add retry summary to chat message for non-streaming (only for multiple attempts)
+                if attempts > 1:
+                    retry_summary = self.format_retry_summary(retry_info)
+                    if retry_summary and not is_streaming:
+                        # Prepend retry summary to the response content
+                        if "choices" in response_data and response_data["choices"]:
+                            content = response_data["choices"][0].get("message", {}).get("content", "")
+                            response_data["choices"][0]["message"]["content"] = f"{retry_summary}\n\n{content}"
 
             if is_streaming:
                 # Streaming response - add retry summary to chat if retries occurred
@@ -784,7 +785,7 @@ class Pipe:
                     return self.stream_response_with_retry_info(r, retry_info, success_session)
                 else:
                     try:
-                        await session.close()
+                        await success_session.close()
                     except Exception:
                         pass
                     err_payload = {"error": {"message": "Error streaming response"}}
@@ -793,12 +794,9 @@ class Pipe:
             else:
                 # Non-streaming response
                 try:
-                    await session.close()
+                    await success_session.close()
                 except Exception:
                     pass
-
-                response_data = response.get("data", {})
-
                 return response_data
 
         except Exception as e:
