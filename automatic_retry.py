@@ -1,6 +1,6 @@
 """
 title: OpenRouter Automatic Retry Pipe
-version: 0.1.17
+version: 0.1.19
 description: Unified automatic retry handler for OpenRouter with consistent notifications for streaming and non-streaming requests
 author: tamarindmonkey
 author_url: https://github.com/tamarindmonkey
@@ -230,6 +230,53 @@ class Pipe:
         except Exception as e:
             return {"error": str(e), "status_code": None}
 
+    async def _send_status(
+        self,
+        event_emitter,
+        description: str,
+        done: bool = False,
+        hidden: bool = False,
+    ):
+        """Emit a status update to the UI event emitter if available (async-safe)."""
+        if not getattr(self.valves, "ENABLE_NOTIFICATIONS", False):
+            return
+        if not event_emitter:
+            return
+
+        # Handle both object with .emit method and callable function
+        if event_emitter:
+            if hasattr(event_emitter, 'emit'):
+                # Object with .emit method
+                try:
+                    res = event_emitter.emit("status", {
+                        "description": description,
+                        "done": done,
+                        "hidden": hidden,
+                    })
+                    if asyncio.iscoroutine(res):
+                        await res
+                    return
+                except Exception:
+                    pass
+            elif callable(event_emitter):
+                # Callable function (like in current OpenWebUI)
+                try:
+                    res = event_emitter({
+                        "type": "status",
+                        "data": {
+                            "description": description,
+                            "done": done,
+                            "hidden": hidden,
+                        }
+                    })
+                    if asyncio.iscoroutine(res):
+                        await res
+                    return
+                except Exception:
+                    pass
+            else:
+                pass
+
     async def _send_notification(
         self,
         event_emitter,
@@ -318,10 +365,27 @@ class Pipe:
         user_name = user.get("name", user.get("id", "unknown")) if user else "unknown"
         model_id = model or "unknown"
 
+        # Send initial status
+        await self._send_status(
+            event_emitter,
+            f"Starting retry process (max {max_attempts} attempts)",
+            done=False,
+            hidden=False,
+        )
+
         for cycle in range(self.valves.cycles):
             for burst in range(self.valves.bursts_before_long_pause):
-                for _ in range(self.valves.attempts_per_burst):
+                for attempt_in_burst in range(self.valves.attempts_per_burst):
                     attempts += 1
+
+                    # Update status for current attempt
+                    await self._send_status(
+                        event_emitter,
+                        f"Attempt {attempts}/{max_attempts} in progress...",
+                        done=False,
+                        hidden=False,
+                    )
+
                     response = await self.make_openrouter_request(
                         session, url, headers, payload, stream
                     )
@@ -355,6 +419,12 @@ class Pipe:
                                 event_emitter,
                                 f"{status or 'unknown'} error after {attempts} attempts. Retrying in {random.uniform(self.valves.burst_pause_min, self.valves.burst_pause_max):.0f} seconds",
                                 "error",
+                            )
+                            await self._send_status(
+                                event_emitter,
+                                f"Attempt {attempts}/{max_attempts}: {status or 'unknown'} error - Retrying in {random.uniform(self.valves.attempt_delay_min, self.valves.attempt_delay_max):.0f}s",
+                                done=False,
+                                hidden=False,
                             )
                             delay = random.uniform(
                                 self.valves.attempt_delay_min, self.valves.attempt_delay_max
@@ -393,6 +463,9 @@ class Pipe:
                 await self._send_notification(
                     event_emitter, f"Burst of {self.valves.attempts_per_burst} attempts failed. Waiting {burst_pause:.0f} seconds before next burst", "warning"
                 )
+                await self._send_status(
+                    event_emitter, f"Burst {burst+1}/{self.valves.bursts_before_long_pause} completed ({attempts}/{max_attempts} attempts). Waiting {burst_pause:.0f}s before next burst", done=False, hidden=False
+                )
                 await asyncio.sleep(burst_pause)
 
             # After bursts in a cycle, long pause before next cycle
@@ -402,6 +475,9 @@ class Pipe:
                 logger.info(f"{user_name}:{model_id} - Cycle {cycle+1} completed; waiting {self.valves.long_pause}s")
                 await self._send_notification(
                     event_emitter, f"Cycle {cycle+1} of {self.valves.cycles} completed without success. Waiting {self.valves.long_pause:.0f} seconds before next cycle", "warning"
+                )
+                await self._send_status(
+                    event_emitter, f"Cycle {cycle+1}/{self.valves.cycles} completed ({attempts}/{max_attempts} attempts). Waiting {self.valves.long_pause:.0f}s before next cycle", done=False, hidden=False
                 )
                 await asyncio.sleep(self.valves.long_pause)
 
@@ -413,6 +489,7 @@ class Pipe:
         retry_info = {"attempts": attempts, "success": False, "errors": errors, "max_retries_exceeded": True}
         logger.error(f"{user_name}:{model_id} - Attempt {attempts}/{max_attempts}: ERROR: {error_code} - {error_message}")
         await self._send_notification(event_emitter, f"All {attempts} attempts failed. Final error: {error_code} - {error_message}", "error")
+        await self._send_status(event_emitter, f"All {attempts} attempts failed. Final error: {error_code}", done=True, hidden=False)
         return {"error": final_err}, retry_info
 
     async def stream_response(
@@ -456,7 +533,7 @@ class Pipe:
             return ""  # No retry summary needed for single attempts
 
         status = "Success" if success else "Failed"
-        summary = f"OpenRouter Retry Summary: {attempts} attempts, {status}"
+        summary = f"Retry Summary: {attempts} attempts, {status}"
 
         if not success and errors:
             # errors may be list of strings or dicts
@@ -554,28 +631,6 @@ class Pipe:
                 model=model_id,
             )
 
-            # UNIFIED notifications - same for both request types
-            if retry_info.get("attempts", 0) > 1:
-                if retry_info.get("success"):
-                    # Success notification for retries
-                    await self._send_notification(
-                        event_emitter,
-                        f"Response received after {retry_info.get('attempts')} attempt(s)",
-                        "success"
-                    )
-
-                    # Retry summary notification (info level)
-                    retry_summary = self.format_retry_summary(retry_info)
-                    if retry_summary:
-                        await self._send_notification(
-                            event_emitter,
-                            retry_summary,
-                            "info",
-                            title="OpenRouter Retry Summary",
-                            timeout=8,
-                            meta={"retry_info": retry_info},
-                        )
-
             # Handle errors with unified notifications
             if "error" in response:
                 error = response["error"]
@@ -608,31 +663,76 @@ class Pipe:
                     pass
                 return {"error": error, "retry_info": retry_info}
 
-            # SUCCESS - only differentiate response format at the end
-            try:
-                await session.close()
-            except Exception:
-                pass
+            # SUCCESS - send notifications and status update, format response
+            if retry_info.get("attempts", 0) > 1:
+                if retry_info.get("success"):
+                    # Success notification for retries
+                    await self._send_notification(
+                        event_emitter,
+                        f"Response received after {retry_info.get('attempts')} attempt(s)",
+                        "success",
+                        timeout=10
+                    )
+
+                    # Retry summary notification (info level)
+                    retry_summary = self.format_retry_summary(retry_info)
+                    if retry_summary:
+                        await self._send_notification(
+                            event_emitter,
+                            retry_summary,
+                            "info",
+                            title="OpenRouter Retry Summary",
+                            timeout=10,
+                            meta={"retry_info": retry_info},
+                        )
+
+                    # Success status update
+                    await self._send_status(
+                        event_emitter,
+                        f"Response received after {retry_info.get('attempts')} attempt(s)",
+                        done=True,
+                        hidden=False
+                    )
+
+                    # Add retry summary to chat message for non-streaming
+                    retry_summary = self.format_retry_summary(retry_info)
+                    if retry_summary and not is_streaming:
+                        # Prepend retry summary to the response content
+                        if "choices" in response_data and response_data["choices"]:
+                            content = response_data["choices"][0].get("message", {}).get("content", "")
+                            response_data["choices"][0]["message"]["content"] = f"{retry_summary}\n\n{content}"
 
             if is_streaming:
-                # Streaming response
+                # Streaming response - add retry summary to chat if retries occurred
+                if retry_info.get("attempts", 0) > 1:
+                    retry_summary = self.format_retry_summary(retry_info)
+                    if retry_summary:
+                        await event_emitter({
+                            "type": "message",
+                            "data": {"content": f"{retry_summary}\n\n"}
+                        })
+
+                # Streaming response - reuse the existing session
                 r = response.get("response")
                 if r:
-                    return self.stream_response_with_retry_info(r, retry_info, aiohttp.ClientSession())
+                    # Don't close the session here - stream_response_with_retry_info will handle it
+                    return self.stream_response_with_retry_info(r, retry_info, session)
                 else:
+                    try:
+                        await session.close()
+                    except Exception:
+                        pass
                     err_payload = {"error": {"message": "Error streaming response"}}
-                    await self._send_notification(event_emitter, "Error streaming response", "error")
+                    await self._send_status(event_emitter, "Error streaming response", done=True, hidden=False)
                     return f"data: {json.dumps(err_payload)}\n\n"
             else:
                 # Non-streaming response
-                response_data = response.get("data", {})
+                try:
+                    await session.close()
+                except Exception:
+                    pass
 
-                # For non-streaming, include retry summary in the response content
-                if retry_info.get("attempts", 0) > 1:
-                    retry_summary = self.format_retry_summary(retry_info)
-                    if retry_summary and "choices" in response_data and response_data["choices"]:
-                        content = response_data["choices"][0].get("message", {}).get("content", "")
-                        response_data["choices"][0]["message"]["content"] = f"{retry_summary}\n\n{content}"
+                response_data = response.get("data", {})
 
                 return response_data
 
